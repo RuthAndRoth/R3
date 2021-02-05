@@ -1,4 +1,4 @@
-	//Program to read Linden Labs *.LLM (Linden Labs Binary Mesh 1.0) files
+	//File to read Linden Labs *.LLM (Linden Labs Binary Mesh 1.0) files
 	//and dump them out converted to text
 	//2020-07-21 Kayaker Magic, aka Mike Higgins
 
@@ -11,7 +11,7 @@ char	s[2048];
 unsigned short int	i[256];
 unsigned long int	l[256];
 
-#define	TITLE	24	//bytes in the heade that say what am I
+#define	TITLE	24	//bytes in the heade that shay what am I
 			//note: there is an extra byte after the nul,
 			//I read it to get to the right spot in file
 
@@ -26,11 +26,30 @@ void dumpfloat(char *name,float *f,int num)
 
 int main(int argc, char  *argv [ ])
 {
+    int loop;
+    int numVertices=0;          //number of vertices
+
     printf("dump llm file: %s\n",argv[1]);
     FILE *ftr = fopen(argv[1],"rb");
-    unsigned int pos = ftell(ftr);
+    if (ftr==NULL)
+    {
+	fprintf(stderr,"Can't open file %s\n",argv[1]);
+	return(1);
+    }
+    unsigned long pos = ftell(ftr);
     fread(s,TITLE,1,ftr);
+    if (strcmp(s,"Linden Binary Mesh 1.0")!=0)
+    {
+	fprintf(stderr,"Not a Linden Binary Mesh 1.0\n");
+	return(2);
+    }
     printf("HEADER: %s\n",s);
+    int flen=strlen(argv[1]);
+    char basellm = argv[1][flen-6];		//an underscore in the file name
+    if (basellm == '_')
+	printf("This is an LOD file\n");	//means an LOD file
+    else
+	printf("This is a BASE file\n");
     pos = ftell(ftr);
     int hasWeights=0;
     fread(&hasWeights,1,1,ftr);	//flag indicating if weights section is in file
@@ -50,10 +69,11 @@ int main(int argc, char  *argv [ ])
     printf("Rotation Order: %i\n",rotationOrder);
     fread(f,3,4,ftr);		//scale
     dumpfloat("Scale:   ",f,3);
-    int numVertices=0;		//number of vertices
+    if (basellm != '_')		//only base files have the following sections
+    {
+    pos =ftell(ftr);
     fread(&numVertices,1,2,ftr);
-    printf("Number of Vertices: %i\n",numVertices);
-    int loop;
+    printf("%04lx:Number of Vertices: %i\n:%04lx:\n",pos,numVertices,ftell(ftr));
     for (loop=0;loop<numVertices;loop++)
     {
 	fread(f,4,3,ftr);	//read one vertex and print it out
@@ -61,7 +81,7 @@ int main(int argc, char  *argv [ ])
 	if ((loop%4)==3)		//every so often
 	    printf("\n");	//break the line
     }
-    printf("\nNormals:\n");
+    printf("\nNormals: %06lx:\n",ftell(ftr));
     for (loop=0;loop<numVertices;loop++)
     {
         fread(f,4,3,ftr);       //read one normal and print it out
@@ -69,7 +89,7 @@ int main(int argc, char  *argv [ ])
         if ((loop%4)==3)                //every so often
             printf("\n");       //break the line
     }
-    printf("\nBinormals:\n");
+    printf("\nBinormals: %06lx:\n",ftell(ftr));
     for (loop=0;loop<numVertices;loop++)
     {
         fread(f,4,3,ftr);       //read one normal and print it out
@@ -77,7 +97,7 @@ int main(int argc, char  *argv [ ])
         if ((loop%4)==3)                //every so often
             printf("\n");       //break the line
     }
-    printf("\nTexture Coords:\n");
+    printf("\nTexture Coords: %08lx:\n",ftell(ftr));
     for (loop=0;loop<numVertices;loop++)
     {
         fread(f,4,2,ftr);       //read one co-ord and print it out
@@ -85,7 +105,7 @@ int main(int argc, char  *argv [ ])
         if ((loop%6)==5)                //every so often
             printf("\n");       //break the line
     }
-    printf("\nDetail Texture Coords:\n");
+    printf("\nDetail Texture Coords: %08lx:\n",ftell(ftr));
     if (hasDetailTexCoords)
     {
         for (loop=0;loop<numVertices;loop++)
@@ -98,7 +118,7 @@ int main(int argc, char  *argv [ ])
     }
     else
         printf("    NONE.");
-    printf("\nWeights:\n");
+    printf("\nWeights: %08lx:\n",ftell(ftr));
     if (hasWeights)
     {
         for (loop=0;loop<numVertices;loop++)
@@ -111,9 +131,12 @@ int main(int argc, char  *argv [ ])
     }
     else
         printf("    NONE.");
+    } //end this is a base llm
+	//even LOD files have a list of trianges
+    pos=ftell(ftr);
     int numFaces=0;
     fread(&numFaces,2,1,ftr);		//how many TRIANGLES
-    printf("\nNumber of Triangles: %i\n",numFaces);
+    printf("\n%08lx:Number of Triangles: %i \n%08lx:\n",pos,numFaces,ftell(ftr));
     for (loop=0;loop<numFaces;loop++)
     {
 	fread(i,2,3,ftr);		//each face is three vertexes
@@ -121,11 +144,17 @@ int main(int argc, char  *argv [ ])
         if ((loop%6)==5)                //every so often
             printf("\n");       //break the line
     }
+    if (basellm != '_')		//only base llm file have the following sections
+    {
+    pos = ftell(ftr);
     int numSkinJoints=0;	//Skin Joints
-    fread(&numSkinJoints,2,1,ftr);
-    printf("\nNumber of Skin Joints: %i\n",numSkinJoints);
+//    fread(&numSkinJoints,2,1,ftr);
+//    printf("\n%08lx:Number of Skin Joints: %i\n%08lx:\n",pos,numSkinJoints,ftell(ftr));
     if (hasWeights)
     {
+    fread(&numSkinJoints,2,1,ftr);
+    printf("\n%08lx:Number of Skin Joints: %i\n%08lx:\n",pos,numSkinJoints,ftell(ftr));
+
 	s[64]=0;		//add an extra nul just in case
 	for (loop=0;loop<numSkinJoints;loop++)
 	{
@@ -134,6 +163,7 @@ int main(int argc, char  *argv [ ])
 	}
     }
     printf("Morph Section:\n");
+    pos = ftell(ftr);
     while(fread(s,1,64,ftr)==64)
     {
 	if (strcmp(s,"End Morphs")==0)
@@ -142,7 +172,8 @@ int main(int argc, char  *argv [ ])
 	    break;
 	}
 	fread(&numVertices,4,1,ftr);		//each named morph has some verticies
-	printf("    %s has %i target_vertex,vertex,normal,binormal,uv\n",s,numVertices);
+	printf("    %s has %i target_vertex,vertex,normal,binormal,uv at %08lx\n",s,numVertices,ftell(ftr));
+///	printf("    %s has %i target_vertices at %08lx\n",s,numVertices,ftell(ftr));
 	int vindex=0;
 	for (loop=0;loop<numVertices;loop++)
 	{
@@ -152,9 +183,10 @@ int main(int argc, char  *argv [ ])
 			vindex,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10]);
 	}
     }
+    pos = ftell(ftr);
     int numRemaps=0;
     fread(&numRemaps,4,1,ftr);
-    printf("Vertex Remap Section has %i remaps\n",numRemaps);
+    printf("%08lx:Vertex Remap Section has %i remaps\n%08lx:\n",pos,numRemaps,ftell(ftr));
     for (loop=0;loop<numRemaps;loop++)
     {
 	int src=0;
@@ -165,6 +197,7 @@ int main(int argc, char  *argv [ ])
 	if ((loop%10)==9)
 	    printf("\n");
     }
+    } //end of base LLM sections
     printf("\nI think I'm done...\n");
     fclose(ftr);
     return 0;
